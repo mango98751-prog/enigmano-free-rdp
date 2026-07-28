@@ -1,110 +1,46 @@
+name: Windows RDP
+
 on:
   workflow_dispatch:
-    inputs:
-      instance:
-        description: 'Instance number (1-10)'
-        required: true
-        default: '1'
-        type: choice
-        options:
-          - '1'
-          - '2'
-          - '3'
-          - '4'
-          - '5'
-          - '6'
-          - '7'
-          - '8'
-          - '9'
-          - '10'
-
-name: EnigMano Instance Deployment
 
 jobs:
-  deploy-rdp:
+  build:
     runs-on: windows-latest
     timeout-minutes: 360
-    
+
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-
-    - name: System Information
-      run: |
-        Write-Host "=== ENIGMANO RDP DEPLOYMENT ===" -ForegroundColor Green
-        Write-Host "Instance Number: ${{ github.event.inputs.instance }}" -ForegroundColor Yellow
-        Write-Host "Runner: $env:RUNNER_NAME" -ForegroundColor Yellow
-        Write-Host "Workflow: $env:GITHUB_WORKFLOW" -ForegroundColor Yellow
-
-        Write-Host "`n=== SYSTEM SPECIFICATIONS ===" -ForegroundColor Cyan
-        Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory
-        Get-WmiObject -Class Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
-
     - name: Enable RDP
       run: |
-        Write-Host "Enabling Remote Desktop..." -ForegroundColor Green
+        Write-Host "Enabling RDP..." -ForegroundColor Green
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
 
-    - name: Create User Account
+    - name: Create User
       run: |
-        Write-Host "Setting up user account..." -ForegroundColor Green
+        Write-Host "Creating user..." -ForegroundColor Green
         $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
         Set-LocalUser -Name "runneradmin" -Password $Password
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
-        Write-Host "Username: runneradmin" -ForegroundColor Yellow
-        Write-Host "Password: P@ssw0rd!" -ForegroundColor Yellow
 
-    - name: Setup ngrok
-      env:
-        NGROK_TOKEN: ${{ secrets.NGROK_SHAHZAIB }}
+    - name: Setup Tailscale
       run: |
-        Write-Host "Setting up ngrok..." -ForegroundColor Green
-        
-        Write-Host "Downloading ngrok v3..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
-        Expand-Archive -Path "ngrok.zip" -DestinationPath "."
-        
-        if ($env:NGROK_TOKEN) {
-          Write-Host "Authenticating ngrok..." -ForegroundColor Yellow
-          .\ngrok.exe authtoken $env:NGROK_TOKEN
-          Write-Host "ngrok authentication successful!" -ForegroundColor Green
-        } else {
-          Write-Host "No ngrok token found!" -ForegroundColor Red
-          exit 1
-        }
-        
-        Write-Host "Starting ngrok tunnel on port 3389..." -ForegroundColor Yellow
-        Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout"
-        Write-Host "ngrok tunnel started!" -ForegroundColor Green
-        
-        Write-Host "Waiting for ngrok tunnel to be ready..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 20
-        
-        try {
-          $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
-          $ngrokUrl = $response.tunnels[0].public_url
-          
-          Write-Host "`n========================================" -ForegroundColor Cyan
-          Write-Host "📋 CONNECTION DETAILS:" -ForegroundColor Yellow
-          Write-Host "Host: $ngrokUrl" -ForegroundColor Green
-          Write-Host "Username: runneradmin" -ForegroundColor Green
-          Write-Host "Password: P@ssw0rd!" -ForegroundColor Green
-          Write-Host "========================================" -ForegroundColor Cyan
-          Write-Host "Session will last up to 6 hours" -ForegroundColor Yellow
-          Write-Host "========================================" -ForegroundColor Cyan
-        } catch {
-          Write-Host "Failed to get ngrok URL. Check ngrok is running." -ForegroundColor Red
-          Write-Host "Error: $_" -ForegroundColor Red
-          exit 1
-        }
+        Write-Host "Installing Tailscale..." -ForegroundColor Green
+        Invoke-WebRequest -Uri "https://tailscale.com/install/windows/tsinstall.exe" -OutFile "tsinstall.exe"
+        Start-Process -Wait -FilePath ".\tsinstall.exe" -ArgumentList "/S"
+        Write-Host "Tailscale installed!" -ForegroundColor Green
+
+    - name: Get IP Info
+      run: |
+        Write-Host "Getting IP info..." -ForegroundColor Yellow
+        ipconfig
+        Write-Host "`n========================================" -ForegroundColor Cyan
+        Write-Host "RDP CONNECTION INFO:" -ForegroundColor Green
+        Write-Host "Username: runneradmin" -ForegroundColor Green
+        Write-Host "Password: P@ssw0rd!" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Cyan
 
     - name: Keep Alive
       run: |
-        Write-Host "Keeping session alive..." -ForegroundColor Green
-        while ($true) {
-          Start-Sleep -Seconds 60
-          $time = Get-Date -Format "HH:mm:ss"
-          Write-Host "[$time] Session active..." -ForegroundColor Gray
-        }
+        Write-Host "Keeping alive..." -ForegroundColor Green
+        while ($true) { Start-Sleep 60 }
