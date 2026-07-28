@@ -13,8 +13,10 @@ jobs:
       run: |
         Write-Host "Enabling RDP..." -ForegroundColor Green
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+        netsh advfirewall firewall set rule group="remote desktop" new enable=Yes
+        netsh advfirewall firewall add rule name="RDP" dir=in action=allow protocol=TCP localport=3389
 
     - name: Create User
       run: |
@@ -22,6 +24,7 @@ jobs:
         $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
         Set-LocalUser -Name "runneradmin" -Password $Password
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
+        Add-LocalGroupMember -Group "Administrators" -Member "runneradmin"
 
     - name: Setup ngrok
       env:
@@ -41,14 +44,15 @@ jobs:
         }
         
         Write-Host "Starting ngrok tunnel..." -ForegroundColor Yellow
-        Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout"
+        Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389"
         
         Write-Host "Waiting for ngrok tunnel..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 20
+        Start-Sleep -Seconds 25
         
         try {
           $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
           $ngrokUrl = $response.tunnels[0].public_url
+          $ngrokUrl = $ngrokUrl -replace "tcp://", ""
           
           Write-Host "`n========================================" -ForegroundColor Cyan
           Write-Host "RDP CONNECTION INFO:" -ForegroundColor Green
@@ -59,7 +63,6 @@ jobs:
           Write-Host "Session lasts 6 hours" -ForegroundColor Yellow
         } catch {
           Write-Host "Failed to get ngrok URL" -ForegroundColor Red
-          Write-Host "Error: $_" -ForegroundColor Red
           exit 1
         }
 
