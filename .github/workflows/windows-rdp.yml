@@ -62,12 +62,12 @@ jobs:
       run: |
         Write-Host "Setting up ngrok..." -ForegroundColor Green
         
-        # ngrok indir
-        Invoke-WebRequest -Uri "https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Write-Host "Downloading ngrok v3..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
         Expand-Archive -Path "ngrok.zip" -DestinationPath "."
         
-        # ngrok auth token
         if ($env:NGROK_TOKEN) {
+          Write-Host "Authenticating ngrok..." -ForegroundColor Yellow
           .\ngrok.exe authtoken $env:NGROK_TOKEN
           Write-Host "ngrok authentication successful!" -ForegroundColor Green
         } else {
@@ -75,14 +75,17 @@ jobs:
           exit 1
         }
         
-        # ngrok tunnel başlat
+        Write-Host "Starting ngrok tunnel on port 3389..." -ForegroundColor Yellow
         Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout"
-        Write-Host "ngrok tunnel started on port 3389" -ForegroundColor Green
+        Write-Host "ngrok tunnel started!" -ForegroundColor Green
         
-        # ngrok URL'yi al
-        Start-Sleep -Seconds 15
+        Write-Host "Waiting for ngrok tunnel to be ready..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 20
+        
         try {
-          $ngrokUrl = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels").tunnels[0].public_url
+          $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+          $ngrokUrl = $response.tunnels[0].public_url
+          
           Write-Host "`n========================================" -ForegroundColor Cyan
           Write-Host "📋 CONNECTION DETAILS:" -ForegroundColor Yellow
           Write-Host "Host: $ngrokUrl" -ForegroundColor Green
@@ -90,8 +93,10 @@ jobs:
           Write-Host "Password: P@ssw0rd!" -ForegroundColor Green
           Write-Host "========================================" -ForegroundColor Cyan
           Write-Host "Session will last up to 6 hours" -ForegroundColor Yellow
+          Write-Host "========================================" -ForegroundColor Cyan
         } catch {
           Write-Host "Failed to get ngrok URL. Check ngrok is running." -ForegroundColor Red
+          Write-Host "Error: $_" -ForegroundColor Red
           exit 1
         }
 
@@ -100,5 +105,6 @@ jobs:
         Write-Host "Keeping session alive..." -ForegroundColor Green
         while ($true) {
           Start-Sleep -Seconds 60
-          Write-Host "Session active..." -ForegroundColor Gray
+          $time = Get-Date -Format "HH:mm:ss"
+          Write-Host "[$time] Session active..." -ForegroundColor Gray
         }
