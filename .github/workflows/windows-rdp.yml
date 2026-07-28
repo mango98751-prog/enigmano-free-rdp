@@ -57,6 +57,8 @@ jobs:
         Write-Host "Password: P@ssw0rd!" -ForegroundColor Yellow
 
     - name: Setup ngrok
+      env:
+        NGROK_TOKEN: ${{ secrets.NGROK_SHAHZAIB }}
       run: |
         Write-Host "Setting up ngrok..." -ForegroundColor Green
         
@@ -65,11 +67,12 @@ jobs:
         Expand-Archive -Path "ngrok.zip" -DestinationPath "."
         
         # ngrok auth token
-        if ($env:NGROK_SHAHZAIB) {
-          .\ngrok.exe authtoken $env:NGROK_SHAHZAIB
+        if ($env:NGROK_TOKEN) {
+          .\ngrok.exe authtoken $env:NGROK_TOKEN
           Write-Host "ngrok authentication successful!" -ForegroundColor Green
         } else {
           Write-Host "No ngrok token found!" -ForegroundColor Red
+          exit 1
         }
         
         # ngrok tunnel başlat
@@ -77,15 +80,20 @@ jobs:
         Write-Host "ngrok tunnel started on port 3389" -ForegroundColor Green
         
         # ngrok URL'yi al
-        Start-Sleep -Seconds 10
-        $ngrokUrl = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels").tunnels[0].public_url
-        Write-Host "`n========================================" -ForegroundColor Cyan
-        Write-Host "📋 CONNECTION DETAILS:" -ForegroundColor Yellow
-        Write-Host "Host: $ngrokUrl" -ForegroundColor Green
-        Write-Host "Username: runneradmin" -ForegroundColor Green
-        Write-Host "Password: P@ssw0rd!" -ForegroundColor Green
-        Write-Host "========================================" -ForegroundColor Cyan
-        Write-Host "Session will last up to 6 hours" -ForegroundColor Yellow
+        Start-Sleep -Seconds 15
+        try {
+          $ngrokUrl = (Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels").tunnels[0].public_url
+          Write-Host "`n========================================" -ForegroundColor Cyan
+          Write-Host "📋 CONNECTION DETAILS:" -ForegroundColor Yellow
+          Write-Host "Host: $ngrokUrl" -ForegroundColor Green
+          Write-Host "Username: runneradmin" -ForegroundColor Green
+          Write-Host "Password: P@ssw0rd!" -ForegroundColor Green
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "Session will last up to 6 hours" -ForegroundColor Yellow
+        } catch {
+          Write-Host "Failed to get ngrok URL. Check ngrok is running." -ForegroundColor Red
+          exit 1
+        }
 
     - name: Keep Alive
       run: |
