@@ -23,22 +23,50 @@ jobs:
         Set-LocalUser -Name "runneradmin" -Password $Password
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
 
-    - name: Setup Tailscale
+    - name: Setup ngrok
+      env:
+        NGROK_TOKEN: ${{ secrets.NGROK_SHAHZAIB }}
       run: |
-        Write-Host "Installing Tailscale..." -ForegroundColor Green
-        Invoke-WebRequest -Uri "https://tailscale.com/install/windows/tsinstall.exe" -OutFile "tsinstall.exe"
-        Start-Process -Wait -FilePath ".\tsinstall.exe" -ArgumentList "/S"
-        Write-Host "Tailscale installed!" -ForegroundColor Green
-
-    - name: Get IP Info
-      run: |
-        Write-Host "Getting IP info..." -ForegroundColor Yellow
-        ipconfig
-        Write-Host "`n========================================" -ForegroundColor Cyan
-        Write-Host "RDP CONNECTION INFO:" -ForegroundColor Green
-        Write-Host "Username: runneradmin" -ForegroundColor Green
-        Write-Host "Password: P@ssw0rd!" -ForegroundColor Green
-        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "Setting up ngrok..." -ForegroundColor Green
+        
+        # ngrok indir
+        Write-Host "Downloading ngrok..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "."
+        
+        # ngrok auth
+        if ($env:NGROK_TOKEN) {
+          Write-Host "Authenticating ngrok..." -ForegroundColor Yellow
+          .\ngrok.exe authtoken $env:NGROK_TOKEN
+          Write-Host "ngrok authenticated!" -ForegroundColor Green
+        } else {
+          Write-Host "No ngrok token!" -ForegroundColor Red
+          exit 1
+        }
+        
+        # ngrok tunnel başlat
+        Write-Host "Starting ngrok tunnel..." -ForegroundColor Yellow
+        Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389 --log=stdout"
+        
+        # ngrok URL'yi al
+        Write-Host "Waiting for ngrok tunnel..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 20
+        
+        try {
+          $response = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+          $ngrokUrl = $response.tunnels[0].public_url
+          
+          Write-Host "`n========================================" -ForegroundColor Cyan
+          Write-Host "RDP CONNECTION INFO:" -ForegroundColor Green
+          Write-Host "Host: $ngrokUrl" -ForegroundColor Green
+          Write-Host "Username: runneradmin" -ForegroundColor Green
+          Write-Host "Password: P@ssw0rd!" -ForegroundColor Green
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "Session lasts 6 hours" -ForegroundColor Yellow
+        } catch {
+          Write-Host "Failed to get ngrok URL" -ForegroundColor Red
+          exit 1
+        }
 
     - name: Keep Alive
       run: |
